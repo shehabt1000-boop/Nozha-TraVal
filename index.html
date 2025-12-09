@@ -2,53 +2,61 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Wolf TraVal | للسياحة والترفيه</title>
     
+    <!-- PWA Setup -->
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- Google Fonts (Cairo) -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
-    
+
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Styles -->
     <style>
         body { font-family: 'Cairo', sans-serif; background-color: #000; overflow-x: hidden; }
-        
+
+        /* تعديل الهيدر ليصبح رفيعاً */
         .glass-nav { 
-            background: rgba(0, 0, 0, 0.6); 
-            backdrop-filter: blur(10px);    
+            background: rgba(0, 0, 0, 0.7); 
+            backdrop-filter: blur(12px);    
             border-bottom: 1px solid rgba(255, 255, 255, 0.05); 
             z-index: 50; 
+            height: 60px; /* ارتفاع ثابت وصغير */
         }
-        
+
         #loader {
             position: fixed; inset: 0; z-index: 9999;
             background-color: #0f172a; 
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.8s ease-out, visibility 0.8s;
+            transition: opacity 0.5s ease-out, visibility 0.5s;
         }
         .loader-hidden { opacity: 0; visibility: hidden; }
-        
+
         .mobile-menu { 
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             transform: translateX(-100%); 
             left: 0; right: auto; 
             will-change: transform;
+            top: 60px !important; /* مطابق لارتفاع الهيدر الجديد */
         }
         .mobile-menu.open { transform: translateX(0); }
-        
+
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #111; }
         ::-webkit-scrollbar-thumb { background: #0d9488; border-radius: 4px; }
-        
+
         input[type="file"]::file-selector-button { margin-left: 0.5rem; background-color: #0d9488; color: white; border: 0; border-radius: 0.5rem; padding: 0.25rem 0.75rem; cursor: pointer; }
         .modal-header-fixed { position: sticky; top: 0; z-index: 10; background-color: rgba(31, 41, 55, 0.95); backdrop-filter: blur(5px); }
         .ltr { direction: ltr; }
-        
+
         .marquee-wrapper { overflow: hidden; width: 100%; position: relative; }
         .marquee-content { display: flex; width: max-content; animation: scrollLeft 45s linear infinite; transform: translateZ(0); backface-visibility: hidden; }
         .marquee-wrapper:hover .marquee-content { animation-play-state: paused; }
@@ -63,13 +71,24 @@
 
         .slide-media { transition: opacity 0.5s ease-in-out; }
     </style>
-    
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker registered', reg))
+                    .catch(err => console.log('Service Worker failed', err));
+            });
+        }
+    </script>
+
     <!-- Firebase & Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
         import { getFirestore, collection, addDoc, query, orderBy, Timestamp, onSnapshot, setDoc, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-        
+
         const COMPANY_NAME = "Wolf TraVal";
         const ADMIN_UID = "GOMXxizbZEPRztWWzigk8CZNpvf2"; 
         const DEFAULT_PHONE = "201206244875"; 
@@ -77,7 +96,7 @@
         const CLOUD_NAME = "db9h7zm1h"; 
         const UPLOAD_PRESET = "souq_upload"; 
         const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`;
-        
+
         let isAdmin = false; 
         let tripsData = []; 
         let bannerData = [];
@@ -85,6 +104,12 @@
         let isEditing = false, editTripId = null, oldImages = [];
         let pendingDelete = null; 
         let currentBookingTrip = null;
+        
+        // Loader Logic Variables
+        let isTripsLoaded = false;
+        let isBannerLoaded = false;
+        let totalImagesToLoad = 0;
+        let imagesLoadedCount = 0;
 
         const firebaseConfig = {
           apiKey: "AIzaSyCTo8DhvaAmNtV9OIgY5eLOeVgF7iQqlYk",
@@ -101,7 +126,7 @@
 
         window.showNotification = function(msg, type) {
             const notif = document.createElement('div');
-            notif.className = `fixed top-24 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl text-white shadow-2xl z-[150] transition-all duration-500 opacity-0 transform translate-y-[-20px] ${type === 'error' ? 'bg-red-600/90' : type === 'success' ? 'bg-green-600/90' : 'bg-gray-700/90'} backdrop-blur-md border border-white/10`;
+            notif.className = `fixed top-24 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl text-white shadow-2xl z-[9999] transition-all duration-500 opacity-0 transform translate-y-[-20px] ${type === 'error' ? 'bg-red-600/90' : type === 'success' ? 'bg-green-600/90' : 'bg-gray-700/90'} backdrop-blur-md border border-white/10`;
             notif.innerHTML = msg;
             document.body.appendChild(notif);
             setTimeout(() => { notif.classList.remove('opacity-0', 'translate-y-[-20px]'); }, 50);
@@ -124,20 +149,37 @@
             return url.match(/\.(mp4|webm|ogg|mov)$/i) || url.includes('/video/upload/');
         }
 
-        function removeLoader() {
-            const loader = document.getElementById('loader');
-            if (loader && !loader.classList.contains('loader-hidden')) {
-                loader.classList.add('loader-hidden');
-                setTimeout(() => loader.remove(), 800);
+        // New Loader Logic: Checks everything
+        function checkAllLoaded() {
+            if (isTripsLoaded && isBannerLoaded) {
+                // Get all images in the DOM that haven't loaded yet
+                const images = document.images;
+                let loaded = true;
+                for (let i = 0; i < images.length; i++) {
+                    if (!images[i].complete) {
+                        loaded = false;
+                        break;
+                    }
+                }
+                
+                if (loaded) {
+                    const loader = document.getElementById('loader');
+                    if (loader && !loader.classList.contains('loader-hidden')) {
+                        loader.classList.add('loader-hidden');
+                        setTimeout(() => loader.remove(), 500);
+                    }
+                } else {
+                    // Re-check in a bit if images are still loading
+                    setTimeout(checkAllLoaded, 500);
+                }
             }
         }
-        setTimeout(removeLoader, 5000);
 
         async function initApp() {
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
-            
+
             onAuthStateChanged(auth, (user) => {
                 if (user && user.uid === ADMIN_UID) {
                     isAdmin = true;
@@ -152,21 +194,18 @@
                 listenForBanner();
             });
 
-            document.getElementById('mobile-menu').style.top = `${document.querySelector('.glass-nav').offsetHeight}px`;
             document.getElementById('companyName').textContent = COMPANY_NAME;
             document.getElementById('footerCompanyName').textContent = COMPANY_NAME;
             document.querySelectorAll('.fb-link').forEach(l => l.href = FB_PAGE);
             document.querySelectorAll('.wa-link').forEach(l => l.href = `https://wa.me/${DEFAULT_PHONE}`);
-            
-            window.addEventListener('load', removeLoader);
         }
 
         // --- Lightbox Logic ---
         window.openLightbox = function(src) {
             const lb = document.getElementById('mainLightbox');
             const container = document.getElementById('lightboxContent');
-            container.innerHTML = ''; // Clear previous
-            
+            container.innerHTML = ''; 
+
             if (isVideo(src)) {
                 container.innerHTML = `<video src="${src}" controls autoplay class="max-w-full max-h-[80vh] rounded-lg"></video>`;
             } else {
@@ -176,7 +215,7 @@
         }
         window.closeLightbox = function() {
             document.getElementById('mainLightbox').classList.remove('active');
-            document.getElementById('lightboxContent').innerHTML = ''; // Stop video
+            document.getElementById('lightboxContent').innerHTML = ''; 
         }
 
         window.changeSlide = function(btn, direction) {
@@ -184,34 +223,47 @@
             const mediaItems = card.querySelectorAll('.slide-media');
             const counter = card.querySelector('.slide-counter');
             let activeIndex = Array.from(mediaItems).findIndex(el => !el.classList.contains('opacity-0'));
-            
+
             mediaItems[activeIndex].classList.add('opacity-0');
             mediaItems[activeIndex].style.pointerEvents = 'none';
             if(mediaItems[activeIndex].tagName === 'VIDEO') mediaItems[activeIndex].pause();
-            
+
             let nextIndex = activeIndex + direction;
             if (nextIndex >= mediaItems.length) nextIndex = 0;
             if (nextIndex < 0) nextIndex = mediaItems.length - 1;
-            
+
             mediaItems[nextIndex].classList.remove('opacity-0');
             mediaItems[nextIndex].style.pointerEvents = 'auto';
             if(mediaItems[nextIndex].tagName === 'VIDEO') mediaItems[nextIndex].play();
-            
+
             if(counter) counter.textContent = `${nextIndex + 1}/${mediaItems.length}`;
         }
 
         function renderTrips(trips) {
             const container = document.getElementById('trips-container');
             container.innerHTML = ''; 
+
+            if (trips.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full flex flex-col items-center justify-center py-16 text-center opacity-80">
+                        <div class="bg-gray-800 p-6 rounded-full mb-4 shadow-xl">
+                            <i class="fas fa-suitcase-rolling text-5xl text-teal-500"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-200 mb-2">لا توجد رحلات متاحة حالياً</h3>
+                        <p class="text-gray-400">نعمل على تجهيز مغامرات جديدة وممتعة لكم. انتظرونا قريباً!</p>
+                    </div>
+                `;
+                return;
+            }
+
             trips.forEach((trip) => {
                 const card = document.createElement('div');
-                // Permanent Shadow (shadow-teal-500/20) + Compact Mobile Width (w-11/12)
                 card.className = "w-11/12 md:w-full max-w-sm mx-auto bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden shadow-lg shadow-teal-500/20 transition-all duration-300 transform";
-                
+
                 let mediaList = Array.isArray(trip.images) ? trip.images : (trip.mainImageUrl ? [trip.mainImageUrl] : ['https://via.placeholder.com/400x300']);
                 let mediaHtml = '';
                 let controlsHtml = '';
-                
+
                 if (mediaList.length > 0) {
                     mediaHtml = mediaList.map((url, index) => {
                         const isVid = isVideo(url);
@@ -242,7 +294,7 @@
                 }
 
                 const tripPhone = trip.whatsappPhone || DEFAULT_PHONE;
-                
+
                 let remainingTime = '', isExpired = false;
                 if (trip.departureDate) {
                     const diffMs = new Date(trip.departureDate) - new Date();
@@ -251,7 +303,7 @@
                 }
 
                 const statusTag = trip.status === 'expired' ? `<div class="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-md z-30 animate-pulse">انتهت 🔥</div>` : '';
-                
+
                 const adminControls = isAdmin ? `
                     <div class="flex flex-wrap justify-between gap-2 mb-3 border-b border-gray-700 pb-3">
                         <button onclick="toggleTripStatus('${trip.id}', '${trip.status === 'expired' ? 'active' : 'expired'}')" class="flex-1 flex justify-center items-center gap-1 ${trip.status === 'expired' ? 'bg-green-900/40 text-green-400' : 'bg-yellow-900/40 text-yellow-400'} hover:bg-opacity-60 px-2 py-1.5 rounded text-xs transition-colors"><i class="fas ${trip.status === 'expired' ? 'fa-redo' : 'fa-ban'}"></i> الحالة</button>
@@ -272,10 +324,10 @@
                         ${adminControls}
                         <div class="flex justify-between items-start mb-2">
                             <h3 class="text-lg font-bold text-white leading-tight">${trip.title}</h3>
-                            <span class="text-teal-400 font-extrabold text-lg whitespace-nowrap">${trip.price} <span class="text-xs font-normal text-gray-400">ج.م</span></span>
+                            <span class="text-teal-400 font-extrabold text-lg whitespace-nowrap">${trip.price} <span class="text-xs font-normal text-gray-300">ج.م</span></span>
                         </div>
-                        <div class="text-gray-400 text-xs mb-4 line-clamp-2 h-8 leading-4">${trip.description}</div>
-                        <div class="text-gray-400 text-[11px] border-t border-gray-700 pt-3 space-y-2">
+                        <div class="text-gray-300 text-xs mb-4 line-clamp-2 h-8 leading-4 font-medium">${trip.description}</div>
+                        <div class="text-gray-300 text-[11px] border-t border-gray-700 pt-3 space-y-2">
                              <div class="flex justify-between"><span><i class="fas fa-calendar-alt ml-1 text-teal-500"></i> ${new Date(trip.departureDate).toLocaleDateString('ar-EG')}</span><span class="${isExpired ? 'text-red-500 font-bold' : 'text-yellow-500'}"><i class="fas fa-hourglass-half ml-1"></i> ${remainingTime}</span></div>
                              <div class="flex justify-between"><span><i class="fas fa-map-marker-alt ml-1 text-blue-500"></i> ${trip.location}</span><span><i class="fas fa-users ml-1 text-blue-500"></i> متاح: ${trip.availableSeats || '0'}</span></div>
                         </div>
@@ -308,17 +360,15 @@
             }
 
             if (videos.length > 0) {
-                const latestVideo = videos[0]; 
                 videoSection.classList.remove('hidden');
-                // Smaller Video Box (max-w-md), Object-Cover for Zoom effect
-                videoContainer.innerHTML = `
-                    <div class="relative w-full mx-auto rounded-2xl overflow-hidden shadow-2xl border border-gray-700 bg-gray-900/50">
+                videoContainer.innerHTML = videos.map(vid => `
+                    <div class="relative w-full mx-auto rounded-2xl overflow-hidden shadow-2xl border border-gray-700 bg-gray-900/50 mb-8 last:mb-0">
                         <video controls playsinline loop class="w-full h-56 md:h-80 object-cover cursor-pointer">
-                            <source src="${latestVideo.url}" type="video/mp4">
+                            <source src="${vid.url}" type="video/mp4">
                         </video>
-                         ${isAdmin ? `<button onclick="confirmDelete('${latestVideo.id}', 'الفيديو', 'banner')" class="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm shadow-lg z-10 backdrop-blur-md flex items-center gap-2"><i class="fas fa-trash-alt"></i> حذف الفيديو</button>` : ''}
+                         ${isAdmin ? `<button onclick="confirmDelete('${vid.id}', 'الفيديو', 'banner')" class="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm shadow-lg z-10 backdrop-blur-md flex items-center gap-2"><i class="fas fa-trash-alt"></i> حذف الفيديو</button>` : ''}
                     </div>
-                `;
+                `).join('');
             } else {
                 videoSection.classList.add('hidden');
                 videoContainer.innerHTML = '';
@@ -384,12 +434,12 @@
             const trip = tripsData.find(t => t.id === id);
             isEditing = true; editTripId = id; 
             oldImages = Array.isArray(trip.images) ? trip.images : (trip.mainImageUrl ? [trip.mainImageUrl] : []);
-            
+
             const modal = document.getElementById('addTripModal');
             modal.classList.remove('hidden'); modal.classList.add('flex');
             document.getElementById('modalTitle').textContent = "تعديل الرحلة";
             document.getElementById('submitBtn').innerHTML = `<i class="fas fa-save ml-1"></i> حفظ التعديلات`;
-            
+
             document.getElementById('tripTitle').value = trip.title;
             document.getElementById('tripLocation').value = trip.location;
             document.getElementById('tripPrice').value = trip.price;
@@ -403,8 +453,26 @@
         window.toggleLoginModal = function() { document.getElementById('loginModal').classList.toggle('hidden'); document.getElementById('loginModal').classList.toggle('flex'); document.getElementById('mobile-menu').classList.remove('open'); }
         window.handleLogin = async function(e) { e.preventDefault(); try { await signInWithEmailAndPassword(auth, document.getElementById('emailInput').value, document.getElementById('passInput').value); window.toggleLoginModal(); } catch (error) { showNotification("بيانات خطأ", "error"); } }
         window.handleLogout = async function() { await signOut(auth); window.location.reload(); }
-        function listenForTrips() { onSnapshot(query(collection(db, tripsPath), orderBy("createdAt", "desc")), (snap) => { tripsData = []; snap.forEach(doc => tripsData.push({id: doc.id, ...doc.data()})); renderTrips(tripsData); }); }
-        function listenForBanner() { onSnapshot(query(collection(db, bannerPath), orderBy("createdAt", "desc")), (snap) => { bannerData = []; snap.forEach(doc => bannerData.push({id: doc.id, ...doc.data()})); renderBanner(bannerData); }); }
+        
+        function listenForTrips() { 
+            onSnapshot(query(collection(db, tripsPath), orderBy("createdAt", "desc")), (snap) => { 
+                tripsData = []; 
+                snap.forEach(doc => tripsData.push({id: doc.id, ...doc.data()})); 
+                renderTrips(tripsData); 
+                isTripsLoaded = true;
+                checkAllLoaded(); // Try to hide loader
+            }); 
+        }
+        function listenForBanner() { 
+            onSnapshot(query(collection(db, bannerPath), orderBy("createdAt", "desc")), (snap) => { 
+                bannerData = []; 
+                snap.forEach(doc => bannerData.push({id: doc.id, ...doc.data()})); 
+                renderBanner(bannerData); 
+                isBannerLoaded = true;
+                checkAllLoaded(); // Try to hide loader
+            }); 
+        }
+        
         window.confirmDelete = function(id, title, type) { pendingDelete = { id, title, type }; document.getElementById('deleteModal').classList.remove('hidden'); document.getElementById('deleteModal').classList.add('flex'); }
         window.executeDelete = async function() { if(!pendingDelete) return; try { await deleteDoc(doc(db, pendingDelete.type==='trip'?tripsPath:bannerPath, pendingDelete.id)); showNotification("تم الحذف", "success"); } catch(e){showNotification("خطأ","error")} window.closeDeleteModal(); }
         window.closeDeleteModal = function() { document.getElementById('deleteModal').classList.add('hidden'); document.getElementById('deleteModal').classList.remove('flex'); }
@@ -441,7 +509,7 @@
         <div class="text-center">
             <i class="fas fa-plane-departure text-6xl text-teal-500 animate-bounce mb-4"></i>
             <h1 class="text-4xl font-black text-white tracking-widest">Wolf TraVal</h1>
-            <p class="text-gray-400 mt-2 text-sm animate-pulse">جاري تجهيز رحلتك...</p>
+            <p class="text-gray-300 mt-2 text-sm animate-pulse">جاري تجهيز رحلتك...</p>
         </div>
     </div>
 
@@ -451,17 +519,18 @@
         <div id="lightboxContent"></div>
     </div>
 
-    <div class="fixed inset-0 z-0">
-        <img src="https://images.pexels.com/photos/2559941/pexels-photo-2559941.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" class="w-full h-full object-cover">
+    <!-- Background Fixed Correctly for Mobile -->
+    <div class="fixed inset-0 z-0 h-[100dvh] w-full pointer-events-none">
+        <img src="https://images.pexels.com/photos/2559941/pexels-photo-2559941.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" class="w-full h-full object-cover object-center">
         <div class="absolute inset-0 bg-black/70"></div> 
     </div>
 
     <div class="relative z-10 flex flex-col min-h-screen">
-        
-        <!-- Navbar -->
-        <nav class="glass-nav sticky top-0 w-full">
-            <div class="container mx-auto px-4 md:px-6 py-4 flex justify-between items-center relative">
-                <button onclick="window.location.reload()" class="text-xl md:text-2xl font-black text-white flex items-center gap-2 hover:text-teal-400">
+
+        <!-- Navbar (Slimmer with py-2 instead of py-4) -->
+        <nav class="glass-nav sticky top-0 w-full flex items-center">
+            <div class="container mx-auto px-4 md:px-6 flex justify-between items-center relative h-full">
+                <button onclick="window.location.reload()" class="text-lg md:text-xl font-black text-white flex items-center gap-2 hover:text-teal-400">
                     <i class="fas fa-plane-departure text-teal-400"></i> <span id="companyName">Wolf TraVal</span>
                 </button>
                 <div class="hidden md:flex items-center gap-6 text-sm font-semibold absolute left-1/2 transform -translate-x-1/2">
@@ -472,19 +541,18 @@
                 <div class="flex items-center gap-3">
                     <div class="hidden md:block">
                         <div id="desktopAdminGroup" class="hidden flex items-center gap-2">
-                            <button onclick="toggleBannerModal()" class="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 backdrop-blur-md transition-all"><i class="fas fa-images text-teal-400"></i> المعرض</button>
-                            <button onclick="toggleTripModal()" class="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 backdrop-blur-md transition-all"><i class="fas fa-plus text-teal-400"></i> رحلة</button>
+                            <button onclick="toggleBannerModal()" class="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-2 py-1 rounded-lg text-xs flex items-center gap-1 backdrop-blur-md transition-all"><i class="fas fa-images text-teal-400"></i> المعرض</button>
+                            <button onclick="toggleTripModal()" class="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-2 py-1 rounded-lg text-xs flex items-center gap-1 backdrop-blur-md transition-all"><i class="fas fa-plus text-teal-400"></i> رحلة</button>
                             <button onclick="handleLogout()" class="text-red-400 hover:text-red-300 text-xs px-2"><i class="fas fa-sign-out-alt"></i></button>
                         </div>
                     </div>
-                    <!-- No Lock Icon -->
-                    <button onclick="toggleMobileMenu()" class="text-white text-xl p-2 hover:text-teal-400 transition-colors"><i class="fas fa-bars"></i></button>
+                    <button onclick="toggleMobileMenu()" class="text-white text-lg p-2 hover:text-teal-400 transition-colors"><i class="fas fa-bars"></i></button>
                 </div>
             </div>
         </nav>
-        
+
         <!-- Sidebar -->
-        <div id="mobile-menu" class="mobile-menu fixed top-0 w-64 h-auto min-h-[50vh] bg-gray-900/95 backdrop-blur-xl z-50 p-5 shadow-2xl flex flex-col gap-6 rounded-br-2xl border-r border-b border-gray-700">
+        <div id="mobile-menu" class="mobile-menu fixed w-64 h-auto min-h-[50vh] bg-gray-900/95 backdrop-blur-xl z-50 p-5 shadow-2xl flex flex-col gap-6 rounded-br-2xl border-r border-b border-gray-700">
             <div class="flex justify-between items-center border-b border-gray-700 pb-4">
                 <span class="text-lg font-bold text-white">القائمة</span>
                 <button onclick="toggleMobileMenu()" class="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-800"><i class="fas fa-times"></i></button>
@@ -505,8 +573,8 @@
         </div>
 
         <!-- Hero -->
-        <header class="flex-grow flex flex-col items-center justify-center text-center pt-8 pb-10 md:pt-10 md:pb-12 overflow-hidden">
-            <div class="w-full mb-10 relative">
+        <header class="flex-grow flex flex-col items-center justify-center text-center pt-4 pb-6 overflow-hidden">
+            <div class="w-full mb-4 relative">
                 <div class="marquee-wrapper"><div id="marquee-track" class="marquee-content py-2"></div></div>
             </div>
             <div class="max-w-3xl px-4 relative z-10">
@@ -548,15 +616,15 @@
     <div id="deleteModal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/90 backdrop-blur-sm p-4"><div class="bg-gray-800 border border-red-500/30 w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center"><div class="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-2xl text-red-500"></i></div><h3 class="text-xl font-bold text-white mb-2">تأكيد الحذف</h3><p id="deleteMessage" class="text-gray-400 text-sm mb-6">هل أنت متأكد؟</p><div class="flex gap-3"><button id="confirmDeleteBtn" onclick="executeDelete()" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition-colors">نعم، حذف</button><button onclick="closeDeleteModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-2.5 rounded-xl transition-colors">إلغاء</button></div></div></div>
     <div id="bookingOptionsModal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/90 backdrop-blur-sm p-4"><div class="bg-gray-800 border border-gray-700 w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center"><h3 class="text-xl font-bold text-white mb-6">كيف يمكننا مساعدتك؟</h3><div class="flex flex-col gap-3"><button onclick="handleInquiry()" class="w-full bg-transparent border border-teal-500 text-teal-400 hover:bg-teal-500/10 font-bold py-3 rounded-xl flex items-center justify-center gap-2"><i class="fab fa-whatsapp text-xl"></i> أحتاج إلى استفسار</button><button onclick="openBookingForm()" class="w-full bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2"><i class="fas fa-check-circle text-xl"></i> أريد الحجز</button></div><button onclick="closeBookingOptions()" class="mt-4 text-gray-500 text-sm hover:text-gray-300">إغلاق</button></div></div>
     <div id="bookingFormModal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/90 backdrop-blur-sm p-4"><div class="bg-gray-800 border border-gray-700 w-full max-w-md rounded-2xl shadow-2xl p-6"><div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-4"><h3 class="text-xl font-bold text-white">بيانات الحجز</h3><button onclick="closeBookingForm()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button></div><form onsubmit="finalizeBooking(event)" class="space-y-4"><div><label class="block text-gray-400 text-xs mb-1">اسم العميل</label><input type="text" id="clientName" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white"></div><div><label class="block text-gray-400 text-xs mb-1">رقم الهاتف</label><input type="tel" id="clientPhone" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white text-right" placeholder="01xxxxxxxxx"></div><div><label class="block text-gray-400 text-xs mb-1">الرحلة المطلوبة</label><input type="text" id="formTripTitle" readonly class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-400"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-gray-400 text-xs mb-1">سعر الفرد</label><input type="text" id="formTripPrice" readonly class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-400 text-center"></div><div><label class="block text-gray-400 text-xs mb-1">عدد الأفراد</label><input type="number" id="formCount" min="1" value="1" oninput="updateTotalPrice()" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white text-center"></div></div><div class="bg-teal-900/30 border border-teal-500/30 p-4 rounded-xl flex justify-between items-center mt-2"><span class="text-teal-400 font-bold">إجمالي السعر:</span><span id="formTotal" class="text-white font-black text-xl">0 ج.م</span></div><button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow-lg mt-4">تأكيد وإرسال للواتساب <i class="fab fa-whatsapp mr-1"></i></button></form></div></div>
-    
-    <!-- Add Trip Modal (Restored Original Grid Layout + Multi-upload & Phone) -->
+
+    <!-- Add Trip Modal -->
     <div id="addTripModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-0 md:p-4 overflow-y-auto">
-        <div class="bg-gray-800 border border-gray-700 w-full md:max-w-xl md:my-8 rounded-none md:rounded-2xl shadow-2xl overflow-hidden h-full md:h-auto flex flex-col">
+        <div class="bg-gray-800 border border-gray-700 w-full md:max-w-xl md:my-8 rounded-none md:rounded-2xl shadow-2xl overflow-hidden h-[100dvh] md:h-auto flex flex-col">
             <div class="modal-header-fixed p-4 border-b border-gray-700 flex justify-between items-center">
                 <h3 id="modalTitle" class="text-xl font-bold text-white">إضافة رحلة جديدة</h3>
                 <button onclick="closeTripModal()" class="text-gray-400 hover:text-white transition-colors"><i class="fas fa-times text-xl"></i></button>
             </div>
-            <form id="addTripForm" onsubmit="handleTripSubmit(event)" class="p-4 md:p-6 space-y-4 md:space-y-6 overflow-y-auto">
+            <form id="addTripForm" onsubmit="handleTripSubmit(event)" class="p-4 md:p-6 space-y-4 md:space-y-6 overflow-y-auto flex-grow">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-sm font-medium text-gray-400 mb-1">عنوان الرحلة</label>
@@ -605,7 +673,7 @@
                     <h4 class="text-white font-bold mb-3"><i class="fas fa-images ml-2"></i> صور/فيديو الرحلة</h4>
                     <input type="file" id="tripImageFile" multiple accept="image/*,video/*" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white ltr">
                 </div>
-                <button type="submit" id="submitBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg shadow-lg transition-colors mt-2">حفظ ونشر الرحلة</button>
+                <button type="submit" id="submitBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg shadow-lg transition-colors mt-2 mb-4">حفظ ونشر الرحلة</button>
             </form>
         </div>
     </div>
