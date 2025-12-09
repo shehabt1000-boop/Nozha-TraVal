@@ -105,11 +105,21 @@
         let pendingDelete = null; 
         let currentBookingTrip = null;
         
-        // Loader Logic Variables
+        // متغيرات للتحكم في اللودر
         let isTripsLoaded = false;
         let isBannerLoaded = false;
-        let totalImagesToLoad = 0;
-        let imagesLoadedCount = 0;
+
+        // دالة إخفاء اللودر
+        function removeLoader() {
+            const loader = document.getElementById('loader');
+            if (loader && !loader.classList.contains('loader-hidden')) {
+                loader.classList.add('loader-hidden');
+                setTimeout(() => loader.remove(), 500);
+            }
+        }
+
+        // --- مؤقت الأمان: 6 ثواني كحد أقصى ---
+        setTimeout(removeLoader, 6000);
 
         const firebaseConfig = {
           apiKey: "AIzaSyCTo8DhvaAmNtV9OIgY5eLOeVgF7iQqlYk",
@@ -149,10 +159,10 @@
             return url.match(/\.(mp4|webm|ogg|mov)$/i) || url.includes('/video/upload/');
         }
 
-        // New Loader Logic: Checks everything
+        // دالة فحص اكتمال التحميل
         function checkAllLoaded() {
             if (isTripsLoaded && isBannerLoaded) {
-                // Get all images in the DOM that haven't loaded yet
+                // التأكد من أن الصور الظاهرة قد تم تحميلها
                 const images = document.images;
                 let loaded = true;
                 for (let i = 0; i < images.length; i++) {
@@ -163,13 +173,9 @@
                 }
                 
                 if (loaded) {
-                    const loader = document.getElementById('loader');
-                    if (loader && !loader.classList.contains('loader-hidden')) {
-                        loader.classList.add('loader-hidden');
-                        setTimeout(() => loader.remove(), 500);
-                    }
+                    removeLoader(); // إخفاء فوري إذا كل شيء جاهز
                 } else {
-                    // Re-check in a bit if images are still loading
+                    // إعادة المحاولة بعد وقت قصير إذا لم تنته المهلة
                     setTimeout(checkAllLoaded, 500);
                 }
             }
@@ -460,7 +466,7 @@
                 snap.forEach(doc => tripsData.push({id: doc.id, ...doc.data()})); 
                 renderTrips(tripsData); 
                 isTripsLoaded = true;
-                checkAllLoaded(); // Try to hide loader
+                checkAllLoaded(); // محاولة إخفاء اللودر
             }); 
         }
         function listenForBanner() { 
@@ -469,7 +475,7 @@
                 snap.forEach(doc => bannerData.push({id: doc.id, ...doc.data()})); 
                 renderBanner(bannerData); 
                 isBannerLoaded = true;
-                checkAllLoaded(); // Try to hide loader
+                checkAllLoaded(); // محاولة إخفاء اللودر
             }); 
         }
         
