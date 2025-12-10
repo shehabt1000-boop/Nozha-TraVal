@@ -113,10 +113,8 @@
         window.showNotification = function(msg, type) {
             const container = document.getElementById('toast-container');
             if (!container) return;
-            // Prevent exact duplicates on screen
             const existingToasts = container.querySelectorAll('div');
             for(let toast of existingToasts) { if(toast.innerText.includes(msg)) return; }
-
             const notif = document.createElement('div');
             notif.className = `transform transition-all duration-500 ease-in-out translate-x-full opacity-0 flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-md border border-white/10 min-w-[300px] ${type === 'error' ? 'bg-red-900/90 text-red-100' : type === 'success' ? 'bg-green-900/90 text-green-100' : 'bg-gray-800/90 text-gray-100'}`;
             let icon = type === 'error' ? '<i class="fas fa-exclamation-circle text-xl"></i>' : type === 'success' ? '<i class="fas fa-check-circle text-xl"></i>' : '<i class="fas fa-info-circle text-teal-400 text-xl"></i>';
@@ -160,47 +158,29 @@
             updateNotificationBadge();
         }
 
-        // New Helper: Add to History List
         function addToNotificationHistory(title, tripId) {
             let history = JSON.parse(localStorage.getItem('notificationHistory') || "[]");
-            
-            // Avoid duplicate notification for same trip ID
             if (history.some(n => n.tripId === tripId)) return;
-
-            const newNotif = {
-                title: title,
-                tripId: tripId,
-                timestamp: new Date().toISOString(),
-                read: false
-            };
-            
-            // Add to beginning
+            const newNotif = { title: title, tripId: tripId, timestamp: new Date().toISOString(), read: false };
             history.unshift(newNotif);
-            // Keep last 20
             if (history.length > 20) history.pop();
-            
             localStorage.setItem('notificationHistory', JSON.stringify(history));
-            
             unreadNotificationsCount++;
             localStorage.setItem('unreadNotifs', unreadNotificationsCount);
             updateNotificationBadge();
         }
         
-        // FIX #1 & #2: Notification Center with History
         window.openNotificationCenter = function() { 
              const modal = document.getElementById('notificationModal');
              const listContainer = document.getElementById('notificationList');
              listContainer.innerHTML = '';
-             
              let history = JSON.parse(localStorage.getItem('notificationHistory') || "[]");
-
              if (history.length === 0) {
                  listContainer.innerHTML = `<div class="flex flex-col items-center py-6 opacity-60"><i class="fas fa-check-circle text-teal-500 text-3xl mb-2"></i><p class="text-sm">لا توجد إشعارات جديدة.</p></div>`;
              } else {
                  history.forEach(notif => {
                     const date = new Date(notif.timestamp);
                     const dateStr = date.toLocaleDateString('ar-EG', {month: 'short', day: 'numeric'}) + ' ' + date.toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'});
-                    
                     listContainer.innerHTML += `
                     <div class="p-4 bg-teal-900/20 border border-teal-500/30 rounded-lg flex items-start gap-3 mb-2 hover:bg-teal-900/30 transition-colors cursor-pointer" onclick="closeNotificationCenter(); window.location.hash='trip-card-${notif.tripId}'; document.getElementById('trip-card-${notif.tripId}').scrollIntoView({behavior:'smooth', block:'center'});">
                         <div class="bg-teal-500/20 p-2 rounded-full text-teal-400 mt-1"><i class="fas fa-plane"></i></div>
@@ -211,10 +191,8 @@
                     </div>`;
                  });
              }
-
              modal.classList.remove('hidden');
              modal.classList.add('flex');
-             
              if (unreadNotificationsCount > 0) {
                  unreadNotificationsCount = 0;
                  localStorage.setItem('unreadNotifs', 0);
@@ -230,11 +208,7 @@
             if (!("Notification" in window)) return;
             try {
                 const permission = await Notification.requestPermission();
-                if (permission === "granted") {
-                    try {
-                        const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-                    } catch(e) {}
-                }
+                if (permission === "granted") { try { const token = await getToken(messaging, { vapidKey: VAPID_KEY }); } catch(e) {} }
             } catch (error) { console.error(error); }
         }
 
@@ -339,7 +313,6 @@
         function renderTrips(trips) {
             const container = document.getElementById('trips-container');
             container.innerHTML = ''; 
-            
             if (trips.length === 0) {
                 container.innerHTML = `
                     <div class="col-span-full flex flex-col items-center justify-center py-16 text-center opacity-80">
@@ -378,8 +351,6 @@
                 }
 
                 const tripPhone = trip.whatsappPhone || DEFAULT_PHONE;
-
-                // FIX #3: Precise Days Remaining Logic
                 let remainingTime = '', isExpired = false;
                 let dateDisplay = 'غير محدد';
                 let timeDisplay = '';
@@ -387,11 +358,8 @@
                 if (trip.departureDate) {
                     const departureDateObj = new Date(trip.departureDate);
                     const now = new Date();
-                    
-                    // Reset time parts to compare pure calendar days
                     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                     const tripMidnight = new Date(departureDateObj.getFullYear(), departureDateObj.getMonth(), departureDateObj.getDate());
-                    
                     const diffTime = tripMidnight - todayMidnight;
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
 
@@ -406,7 +374,6 @@
                     } else {
                         remainingTime = `باقي ${diffDays} أيام`;
                     }
-                    
                     dateDisplay = departureDateObj.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' });
                     timeDisplay = departureDateObj.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
                 }
@@ -419,7 +386,6 @@
                         <button onclick="confirmDelete('${trip.id}', '${trip.title}', 'trip')" class="flex-1 flex justify-center items-center gap-1 bg-red-900/40 text-red-400 hover:bg-red-900/60 px-2 py-1.5 rounded text-xs transition-colors"><i class="fas fa-trash-alt"></i> حذف</button>
                     </div>` : '';
 
-                // FIX #4: Descriptive Text for Date/Time
                 card.innerHTML = `
                     <div class="trip-card-image-container relative h-64 flex-shrink-0 overflow-hidden bg-gray-800">
                         ${mediaHtml} ${controlsHtml}
@@ -429,7 +395,6 @@
                         ${statusTag}
                         <button onclick="shareTrip('${trip.title}', '?tripId=${trip.id}')" class="absolute bottom-4 right-4 bg-white text-gray-900 w-8 h-8 rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform z-20"><i class="fas fa-share-alt"></i></button>
                     </div>
-                    
                     <div class="trip-card-body p-5 bg-gray-800/50 rounded-b-2xl"> 
                         ${adminControls}
                         <div class="flex justify-between items-start mb-2">
@@ -437,7 +402,6 @@
                             <span class="text-teal-400 font-extrabold text-lg whitespace-nowrap">${trip.price} <span class="text-xs font-normal text-gray-300">ج.م</span></span>
                         </div>
                         <div class="description-content text-gray-300 text-xs font-medium">${trip.description}</div>
-                        
                         <div class="card-bottom-section">
                             <div class="text-gray-300 text-[11px] border-t border-gray-700 pt-3 space-y-2">
                                 <div class="flex flex-col gap-1">
@@ -523,20 +487,14 @@
         function listenForTrips() { 
             onSnapshot(query(collection(db, tripsPath), orderBy("createdAt", "desc")), (snap) => { 
                 if (!initialLoadComplete) {
-                    // FIX #2: Check Last TWO Trips on Load
                      if (snap.size > 0) {
-                         // Check up to 2 latest trips
                          const countToCheck = Math.min(snap.size, 2); 
                          for (let i = 0; i < countToCheck; i++) {
                              const tripDoc = snap.docs[i];
                              const tripData = tripDoc.data();
-                             
-                             // Check if notification exists in history
                              let history = JSON.parse(localStorage.getItem('notificationHistory') || "[]");
                              const alreadyNotified = history.some(n => n.tripId === tripDoc.id);
-
                              if (!alreadyNotified) {
-                                 // Only notify if recent (48h)
                                  const nowSeconds = Timestamp.now().seconds;
                                  const createdSeconds = tripData.createdAt ? tripData.createdAt.seconds : 0;
                                  if ((nowSeconds - createdSeconds) < 172800) { 
@@ -557,7 +515,6 @@
                         }
                     });
                 }
-                
                 tripsData = []; 
                 snap.forEach(doc => tripsData.push({id: doc.id, ...doc.data()})); 
                 renderTrips(tripsData); 
@@ -622,7 +579,8 @@
         <div id="lightboxContent"></div>
     </div>
 
-    <div class="fixed inset-0 z-0 h-[100dvh] w-full pointer-events-none">
+    <!-- Background Fixed Correctly -->
+    <div class="fixed top-0 left-0 z-0 w-full h-full pointer-events-none">
         <img src="https://images.pexels.com/photos/2559941/pexels-photo-2559941.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" class="w-full h-full object-cover object-center">
         <div class="absolute inset-0 bg-black/70"></div> 
     </div>
@@ -729,8 +687,9 @@
         </div>
     </div>
     
-    <div id="addTripModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-0 md:p-4 overflow-y-auto">
-        <div class="bg-gray-800 border border-gray-700 w-full md:max-w-xl md:my-8 rounded-none md:rounded-2xl shadow-2xl overflow-hidden h-[100dvh] md:h-auto flex flex-col">
+    <!-- Add Trip Modal Fixed -->
+    <div id="addTripModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+        <div class="bg-gray-800 border border-gray-700 w-full md:max-w-xl my-4 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] h-auto">
             <div class="modal-header-fixed p-4 border-b border-gray-700 flex justify-between items-center">
                 <h3 id="modalTitle" class="text-xl font-bold text-white">إضافة رحلة جديدة</h3>
                 <button onclick="closeTripModal()" class="text-gray-400 hover:text-white transition-colors"><i class="fas fa-times text-xl"></i></button>
